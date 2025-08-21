@@ -21,7 +21,7 @@ class UserInput(BaseModel):
     social_media_reach: int
 
 # Define the prediction endpoint
-@app.post("/api/predict")
+@app.post("/predict")
 def predict_loan_approval(data: UserInput):
     # Create a pandas DataFrame from the input data.
     # The column names MUST EXACTLY match the names the model was trained on.
