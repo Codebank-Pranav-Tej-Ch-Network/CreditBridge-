@@ -44,6 +44,10 @@ interface FormData {
   travelPattern: string
   locationStability: string
 
+  // ADD THESE NEW FIELDS
+  socialMediaScreentime: string; // e.g., hours per day
+  ecommerceScreenTime: string;   // e.g., hours per day
+
   // Social Media
   linkedinVerified: boolean
   facebookProfile: boolean
@@ -93,10 +97,14 @@ export default function NewAssessmentPage() {
     dobMatch: false,
     addressMatch: false,
     documentScore: "",
+    socialMediaScreentime: "",
+    ecommerceScreenTime: "",
   })
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const totalSteps = 6
-  const progress = (currentStep / totalSteps) * 100
+  const totalSteps = 6 // Your form has 6 steps
+  const progress = (currentStep/ totalSteps) * 100
 
   const handleInputChange = (field: keyof FormData, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -114,12 +122,67 @@ export default function NewAssessmentPage() {
     }
   }
 
-  const handleSubmit = () => {
-    console.log("Form submitted:", formData)
-    router.push("/assessment/processing")
-  }
+  const handleSubmit = async () => {
+    setIsLoading(true)
+    setError(null)
+    // A simple function to convert a categorical input to a numerical score
+    const getMovementScore = (pattern: string) => {
+        switch (pattern) {
+            case "frequent": return 0.9;
+            case "occasional": return 0.6;
+            case "local": return 0.3;
+            case "stationary": return 0.1;
+            default: return 0.3;
+        }
+      };
 
-  const renderStepContent = () => {
+    // 1. Map frontend form data to the model's required input structure (check again!)
+      // --- FINAL DYNAMIC modelInput OBJECT ---
+    const modelInput = {
+      bank_transaction_average: parseFloat(formData.averageBalance) || 0,
+      social_media_screentime: parseFloat(formData.socialMediaScreentime) || 0,
+      ecommerce_screen_time: parseFloat(formData.ecommerceScreenTime) || 0,
+      cibil_score: parseInt(formData.cibilScore, 10) || 0,
+      geographical_movement: getMovementScore(formData.travelPattern),
+      social_media_reach: parseInt(formData.socialMediaScore, 10) * 100,
+    };
+
+    try {
+      // 2. Call the backend API
+      const response = await fetch("/api/predict", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(modelInput),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to get prediction from the model.");
+      }
+
+      const result = await response.json();
+
+      // 3. Store both form data and API result for the results page
+      const resultData = {
+          formData: formData,
+          apiResponse: result
+      };
+      localStorage.setItem('assessmentResult', JSON.stringify(resultData));
+
+      // 4. Navigate to the processing page
+      router.push("/assessment/processing");
+
+    } catch (err: any) {
+      setError(err.message);
+      console.error("API Error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Paste your entire 'renderStepContent' function and the main return JSX here.
+   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
         return (
@@ -381,9 +444,29 @@ export default function NewAssessmentPage() {
                     onChange={(e) => handleInputChange("simAge", e.target.value)}
                     placeholder="24"
                   />
-                </div>
+                </div> 
               </div>
+              <div className="space-y-2">
+              <Label htmlFor="socialMediaScreentime">Avg. Social Media Screentime (hours/day)</Label>
+              <Input
+               id="socialMediaScreentime"
+               value={formData.socialMediaScreentime}
+               onChange={(e) => handleInputChange("socialMediaScreentime", e.target.value)}
+               placeholder="e.g., 4.5"
+               type="number"
+                   />
+                   </div>
 
+              <div className="space-y-2">
+              <Label htmlFor="ecommerceScreenTime">Avg. E-commerce Screentime (hours/day)</Label>
+              <Input
+               id="ecommerceScreenTime"
+               value={formData.ecommerceScreenTime}
+               onChange={(e) => handleInputChange("ecommerceScreenTime", e.target.value)}
+               placeholder="e.g., 2.0"
+               type="number"
+               />
+              </div>
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="networkProvider">Network Provider</Label>
@@ -588,9 +671,10 @@ export default function NewAssessmentPage() {
         return null
     }
   }
-
   return (
-    <div className="container mx-auto py-8 px-4 max-w-4xl">
+    // Paste your full JSX from your original `assessment/new/page.tsx` file here
+    // The logic above will now power it correctly.
+<div className="container mx-auto py-8 px-4 max-w-4xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground mb-2">New Credit Assessment</h1>
         <p className="text-muted-foreground">
@@ -617,14 +701,12 @@ export default function NewAssessmentPage() {
           (step, index) => (
             <div
               key={index}
-              className={`flex flex-col items-center ${
-                index + 1 <= currentStep ? "text-primary" : "text-muted-foreground"
-              }`}
+              className={`flex flex-col items-center ${index + 1 <= currentStep ? "text-primary" : "text-muted-foreground"
+                }`}
             >
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium mb-2 ${
-                  index + 1 <= currentStep ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                }`}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium mb-2 ${index + 1 <= currentStep ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                  }`}
               >
                 {index + 1}
               </div>
@@ -665,13 +747,18 @@ export default function NewAssessmentPage() {
           ) : (
             <button
               onClick={handleSubmit}
-              className="px-6 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md"
+              disabled={isLoading}
+              className="px-6 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md disabled:opacity-50"
             >
-              Submit Assessment
+              {isLoading ? 'Submitting...' : 'Submit Assessment'}
             </button>
           )}
         </div>
       </div>
+      {error && <p className="text-red-500 mt-4 text-center w-full">{error}</p>}
     </div>
   )
 }
+
+  
+  
