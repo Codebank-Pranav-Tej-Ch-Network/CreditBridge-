@@ -149,7 +149,7 @@ export default function NewAssessmentPage() {
 
     try {
       // 2. Call the backend API
-      const response = await fetch("/api/predict", {
+      const response = await fetch("/.netlify/functions/predict", {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
